@@ -2,7 +2,87 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { Client, Collection, GatewayIntentBits, Events } = require('discord.js');
 const { evaluate } = require('mathjs'); // The safe math library!
+const Database = require('better-sqlite3');
 require('dotenv').config();
+
+// Connect to the SQLite Database
+const db = new Database(path.join(__dirname, 'counting.sqlite'));
+
+// Create necessary tables if they don't exist
+db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_data (
+        guild_id TEXT PRIMARY KEY,
+        channel_id TEXT,
+        mode TEXT,
+        twice_behavior TEXT,
+        allow_talking INTEGER,
+        current_number INTEGER,
+        last_user_id TEXT,
+        high_score INTEGER,
+        last_high_score INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS user_stats (
+        guild_id TEXT,
+        user_id TEXT,
+        counts INTEGER,
+        ruins INTEGER,
+        highest INTEGER,
+        PRIMARY KEY (guild_id, user_id)
+    );
+`);
+
+// --- AUTOMATIC JSON MIGRATION SCRIPT ---
+const oldDataPath = path.join(__dirname, 'data.json');
+if (fs.existsSync(oldDataPath)) {
+    console.log('[MIGRATION] Found data.json! Migrating to counting.sqlite...');
+    try {
+        const oldData = JSON.parse(fs.readFileSync(oldDataPath, 'utf8'));
+        
+        const insertGuild = db.prepare(`
+            INSERT OR REPLACE INTO guild_data 
+            (guild_id, channel_id, mode, twice_behavior, allow_talking, current_number, last_user_id, high_score, last_high_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        const insertUser = db.prepare(`
+            INSERT OR REPLACE INTO user_stats (guild_id, user_id, counts, ruins, highest)
+            VALUES (?, ?, ?, ?, ?)
+        `);
+        
+        db.transaction(() => {
+            for (const [guildId, gData] of Object.entries(oldData)) {
+                insertGuild.run(
+                    guildId,
+                    gData.channelId || null,
+                    gData.mode || 'basic',
+                    gData.twiceBehavior || 'reset',
+                    gData.allowTalking ? 1 : 0,
+                    gData.currentNumber || 1,
+                    gData.lastUserId || null,
+                    gData.highScore || 0,
+                    gData.lastHighScore || 0
+                );
+                
+                if (gData.users) {
+                    for (const [userId, stats] of Object.entries(gData.users)) {
+                        insertUser.run(
+                            guildId,
+                            userId,
+                            stats.counts || 0,
+                            stats.ruins || 0,
+                            stats.highest || 0
+                        );
+                    }
+                }
+            }
+        })();
+        
+        // Rename old format out of the way to prevent re-migration
+        fs.renameSync(oldDataPath, path.join(__dirname, 'data.old.json'));
+        console.log('[MIGRATION] Migration successful! Renamed old file to data.old.json.');
+    } catch (e) {
+        console.error('[MIGRATION ERROR]', e);
+    }
+}
 
 // Define required Gateway intents for the bot.
 const client = new Client({
@@ -58,21 +138,38 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
+// Prepared SQL Statements for peak performance in Event Listeners
+const getGuild = db.prepare('SELECT * FROM guild_data WHERE guild_id = ?');
+const updateGuildState = db.prepare('UPDATE guild_data SET current_number = ?, last_user_id = ?, high_score = ?, last_high_score = ? WHERE guild_id = ?');
+
+// Helper to insert or update user stats safely
+const getUserStats = db.prepare('SELECT * FROM user_stats WHERE guild_id = ? AND user_id = ?');
+const insertUserStats = db.prepare('INSERT INTO user_stats (guild_id, user_id, counts, ruins, highest) VALUES (?, ?, ?, ?, ?)');
+const updateUserStat = db.prepare('UPDATE user_stats SET counts = ?, ruins = ?, highest = ? WHERE guild_id = ? AND user_id = ?');
+
+function trackUserStat(guildId, userId, type, countNumber) {
+    let stat = getUserStats.get(guildId, userId);
+    if (!stat) {
+        insertUserStats.run(guildId, userId, 0, 0, 0);
+        stat = { counts: 0, ruins: 0, highest: 0 };
+    }
+    
+    if (type === 'ruin') {
+        stat.ruins += 1;
+    } else if (type === 'count') {
+        stat.counts += 1;
+        if (countNumber > stat.highest) stat.highest = countNumber;
+    }
+    updateUserStat.run(stat.counts, stat.ruins, stat.highest, guildId, userId);
+}
+
 // Process incoming messages for the counting game.
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
-    const dataPath = path.join(__dirname, 'data.json');
-    let database = {};
-    try {
-        database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch (error) {
-        return;
-    }
-
-    const guildData = database[message.guild.id];
+    const guildData = getGuild.get(message.guild.id);
     if (!guildData) return;
-    if (message.channel.id !== guildData.channelId) return;
+    if (message.channel.id !== guildData.channel_id) return;
 
     let userNumber = null;
     let isValidInput = false;
@@ -95,10 +192,10 @@ client.on(Events.MessageCreate, async message => {
 
     // Helper function to handle incorrect counts and reset the game state.
     const ruinCount = async (reason) => {
-        const achievedNumber = guildData.currentNumber - 1;
+        const achievedNumber = guildData.current_number - 1;
         // Retrieve the previous high score to verify if a new record was set.
-        const previousRecord = guildData.lastHighScore !== undefined ? guildData.lastHighScore : (guildData.highScore || 0);
-        const currentRecord = guildData.highScore || 0;
+        const previousRecord = guildData.last_high_score !== null ? guildData.last_high_score : (guildData.high_score || 0);
+        const currentRecord = guildData.high_score || 0;
 
         let recordText = `🏆 The server **HIGHSCORE** is \`${currentRecord}\`.`;
 
@@ -110,10 +207,7 @@ client.on(Events.MessageCreate, async message => {
         await message.react('❌');
 
         // Track the ruin in user stats.
-        const userId = message.author.id;
-        guildData.users = guildData.users || {};
-        guildData.users[userId] = guildData.users[userId] || { counts: 0, ruins: 0, highest: 0 };
-        guildData.users[userId].ruins += 1;
+        trackUserStat(message.guild.id, message.author.id, 'ruin');
 
         // Format the ruin notification message.
         let ruinMessage = `🚨 ${reason}\n\n💀 ${message.author} ruined the count`;
@@ -125,26 +219,23 @@ client.on(Events.MessageCreate, async message => {
         await message.reply(ruinMessage);
 
         // Reset the game state while preserving the high score.
-        guildData.currentNumber = 1;
-        guildData.lastUserId = null;
         // Persist the current high score as the baseline for the next session.
-        guildData.lastHighScore = guildData.highScore;
-        fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+        updateGuildState.run(1, null, guildData.high_score, guildData.high_score, message.guild.id);
     };
 
     // Validate the user input based on the game mode.
     if (!isValidInput) {
-        if (guildData.allowTalking) return; // Ignore normal text chat
+        if (guildData.allow_talking) return; // Ignore normal text chat
         return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}!`);
     }
 
     // Handle consecutive counts by the same user.
-    if (message.author.id === guildData.lastUserId) {
-        const behavior = guildData.twiceBehavior || 'reset';
+    if (message.author.id === guildData.last_user_id) {
+        const behavior = guildData.twice_behavior || 'reset';
 
         if (behavior === 'warn') {
             await message.react('⚠️');
-            return message.reply(`You can't count twice in a row, **${message.author.username}**! The next number is still **${guildData.currentNumber}**.`);
+            return message.reply(`You can't count twice in a row, **${message.author.username}**! The next number is still **${guildData.current_number}**.`);
         } else if (behavior === 'allow') {
             // No action needed; allow consecutive counting.
         } else {
@@ -153,8 +244,8 @@ client.on(Events.MessageCreate, async message => {
     }
 
     // Verify if the input matches the expected sequence number.
-    if (userNumber !== guildData.currentNumber) {
-        return ruinCount(`You typed \`${userNumber}\`, but the next number was \`${guildData.currentNumber}\`!`);
+    if (userNumber !== guildData.current_number) {
+        return ruinCount(`You typed \`${userNumber}\`, but the next number was \`${guildData.current_number}\`!`);
     }
 
     // Process successful count.
@@ -186,42 +277,29 @@ client.on(Events.MessageCreate, async message => {
     if (userNumber % 1000 === 0) await message.react('🎉'); // Reacts to 1000, 2000, 3000, etc.
 
     // Update the current high score.
-    if (!guildData.highScore) guildData.highScore = 0;
-    if (userNumber > guildData.highScore) {
-        guildData.highScore = userNumber;
+    let newHighScore = guildData.high_score;
+    if (!newHighScore) newHighScore = 0;
+    if (userNumber > newHighScore) {
+        newHighScore = userNumber;
     }
 
     // Track the successful count in user stats.
-    const userId = message.author.id;
-    guildData.users = guildData.users || {};
-    guildData.users[userId] = guildData.users[userId] || { counts: 0, ruins: 0, highest: 0 };
-    guildData.users[userId].counts += 1;
-    if (userNumber > guildData.users[userId].highest) {
-        guildData.users[userId].highest = userNumber;
-    }
+    trackUserStat(message.guild.id, message.author.id, 'count', userNumber);
 
     // Increment the count and persist the updated game state.
-    guildData.currentNumber += 1;
-    guildData.lastUserId = message.author.id;
-    fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+    updateGuildState.run(guildData.current_number + 1, message.author.id, newHighScore, guildData.last_high_score, message.guild.id);
 });
 
 // Anti-Cheat: Catch message edits for counting attempts
 client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
     if (newMessage.author && newMessage.author.bot) return;
     
-    const dataPath = path.join(__dirname, 'data.json');
-    let database = {};
-    try {
-        database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch(err) { return; }
-    
-    const guildData = database[newMessage.guildId];
-    if (!guildData || newMessage.channelId !== guildData.channelId) return;
+    const guildData = getGuild.get(newMessage.guildId);
+    if (!guildData || newMessage.channelId !== guildData.channel_id) return;
     
     if (oldMessage.partial) return; // Can't verify original content
     
-    const lastValidNumber = guildData.currentNumber - 1;
+    const lastValidNumber = guildData.current_number - 1;
     let editedNumber = null;
     
     // Check if the original message was the last valid count
@@ -240,23 +318,17 @@ client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
     if (editedNumber !== lastValidNumber || lastValidNumber === 0) return;
 
     // If it was the correct count, scold them
-    await newMessage.reply(`⚠️ **${newMessage.author.username}**, you are not allowed to edit your counting numbers!`);
+    await newMessage.reply(`⚠️ **${newMessage.author.username}**, you are not allowed to edit your counting numbers! The next number is **${guildData.current_number}**.`);
 });
 
 // Anti-Cheat: Catch message deletes for correct counting numbers
 client.on(Events.MessageDelete, async message => {
     if (message.partial || (message.author && message.author.bot)) return;
     
-    const dataPath = path.join(__dirname, 'data.json');
-    let database = {};
-    try {
-        database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch(err) { return; }
-    
-    const guildData = database[message.guildId];
-    if (!guildData || message.channelId !== guildData.channelId) return;
+    const guildData = getGuild.get(message.guildId);
+    if (!guildData || message.channelId !== guildData.channel_id) return;
 
-    const lastValidNumber = guildData.currentNumber - 1;
+    const lastValidNumber = guildData.current_number - 1;
     let deletedNumber = null;
     
     if (guildData.mode === 'advanced') {

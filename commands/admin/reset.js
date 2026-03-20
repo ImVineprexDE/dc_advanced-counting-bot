@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const fs = require('node:fs');
 const path = require('node:path');
+const Database = require('better-sqlite3');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -27,17 +27,12 @@ module.exports = {
         const target = interaction.options.getString('target');
         const targetUser = interaction.options.getUser('user');
         const guildId = interaction.guild.id;
-        const dataPath = path.join(__dirname, '..', '..', 'data.json');
-        
-        let database = {};
-        try {
-            database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-        } catch (error) {
-            return interaction.reply({ content: '❌ Could not read the database.', ephemeral: true });
-        }
 
+        const db = new Database(path.join(__dirname, '..', '..', 'counting.sqlite'));
+        
         // Verify if the counting game is initialized for the guild.
-        if (!database[guildId]) {
+        const guildData = db.prepare('SELECT * FROM guild_data WHERE guild_id = ?').get(guildId);
+        if (!guildData) {
             return interaction.reply({ 
                 content: '❌ This server has not set up the counting game yet. Run `/setup` first.', 
                 ephemeral: true 
@@ -47,8 +42,7 @@ module.exports = {
         // Process reset based on target selection.
         switch (target) {
             case 'highscore':
-                database[guildId].highScore = 0;
-                fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+                db.prepare('UPDATE guild_data SET high_score = 0 WHERE guild_id = ?').run(guildId);
                 
                 await interaction.reply({ 
                     content: '✅ The **High Score** has been successfully reset to **0**.', 
@@ -58,9 +52,9 @@ module.exports = {
                 
             case 'stats':
                 if (targetUser) {
-                    if (database[guildId].users && database[guildId].users[targetUser.id]) {
-                        delete database[guildId].users[targetUser.id];
-                        fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+                    const row = db.prepare('SELECT * FROM user_stats WHERE guild_id = ? AND user_id = ?').get(guildId, targetUser.id);
+                    if (row) {
+                        db.prepare('DELETE FROM user_stats WHERE guild_id = ? AND user_id = ?').run(guildId, targetUser.id);
                         await interaction.reply({ 
                             content: `✅ Statistics for **${targetUser.username}** have been reset.`, 
                             ephemeral: true 
@@ -72,8 +66,7 @@ module.exports = {
                         });
                     }
                 } else {
-                    database[guildId].users = {};
-                    fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+                    db.prepare('DELETE FROM user_stats WHERE guild_id = ?').run(guildId);
                     await interaction.reply({ 
                         content: '✅ **All User Statistics** have been reset for the server.', 
                         ephemeral: true 

@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
-const fs = require('node:fs');
 const path = require('node:path');
+const Database = require('better-sqlite3');
 
 module.exports = {
     // Command registration data.
@@ -18,24 +18,18 @@ module.exports = {
     async execute(interaction) {
         const targetUser = interaction.options.getUser('user') || interaction.user;
         const guildId = interaction.guild.id;
-        const dataPath = path.join(__dirname, '..', '..', 'data.json');
-        
-        let database = {};
-        try {
-            database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-        } catch (error) {
-            return interaction.reply({ content: '❌ Could not read the database.', ephemeral: true });
-        }
 
-        const guildData = database[guildId];
-        if (!guildData || !guildData.users || !guildData.users[targetUser.id]) {
+        const db = new Database(path.join(__dirname, '..', '..', 'counting.sqlite'));
+
+        const userStats = db.prepare('SELECT * FROM user_stats WHERE guild_id = ? AND user_id = ?').get(guildId, targetUser.id);
+        
+        if (!userStats) {
             return interaction.reply({ 
                 content: `📊 **${targetUser.username}** hasn't participated in the counting game yet!`, 
                 ephemeral: true 
             });
         }
 
-        const userStats = guildData.users[targetUser.id];
         const total = (userStats.counts || 0) + (userStats.ruins || 0);
         const accuracy = total > 0 ? (((userStats.counts || 0) / total) * 100).toFixed(1) : 0;
 

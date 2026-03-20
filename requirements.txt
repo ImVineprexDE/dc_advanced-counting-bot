@@ -1,0 +1,9 @@
+# Node.js Dependencies for Advanced Counting Bot
+# Note: Node projects typically use package.json to manage dependencies. 
+# You can install all of these automatically by running: npm install
+# However, if you need a direct reference, here are the explicitly required packages:
+
+discord.js@^14.25.1
+better-sqlite3@^12.8.0
+mathjs@^15.1.1
+dotenv@^17.3.1

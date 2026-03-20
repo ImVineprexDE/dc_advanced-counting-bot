@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
-const fs = require('node:fs');
 const path = require('node:path');
+const Database = require('better-sqlite3');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -46,32 +46,18 @@ module.exports = {
         const allowTalking = interaction.options.getBoolean('allow_talking');
         const guildId = interaction.guild.id;
 
-        const dataPath = path.join(__dirname, '..', '..', 'data.json');
-        
-        let database = {};
-        try {
-            const rawData = fs.readFileSync(dataPath, 'utf8');
-            database = JSON.parse(rawData);
-        } catch (error) {
-            console.error("Error reading data.json:", error);
-        }
+        const db = new Database(path.join(__dirname, '..', '..', 'counting.sqlite'));
 
         // Retrieve existing high score if available.
-        const existingData = database[guildId] || {};
-        const savedHighScore = existingData.highScore || 0;
+        const existingData = db.prepare('SELECT high_score FROM guild_data WHERE guild_id = ?').get(guildId);
+        const savedHighScore = existingData ? existingData.high_score : 0;
 
         // Initialize and persist new game state for the guild.
-        database[guildId] = {
-            channelId: targetChannel.id,
-            mode: selectedMode,
-            twiceBehavior: twiceBehavior, 
-            allowTalking: allowTalking,
-            currentNumber: 1,
-            lastUserId: null,
-            highScore: savedHighScore
-        };
-
-        fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+        db.prepare(`
+            INSERT OR REPLACE INTO guild_data 
+            (guild_id, channel_id, mode, twice_behavior, allow_talking, current_number, last_user_id, high_score, last_high_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(guildId, targetChannel.id, selectedMode, twiceBehavior, allowTalking ? 1 : 0, 1, null, savedHighScore, savedHighScore);
 
         const displayMode = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
         
