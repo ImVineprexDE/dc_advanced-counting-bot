@@ -6,7 +6,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('reset')
         .setDescription('Reset specific data for the counting game.')
-        // RESTRICT TO ADMINS ONLY
+        // Restrict command to Administrators.
         .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
         .addStringOption(option => 
             option.setName('target')
@@ -14,7 +14,7 @@ module.exports = {
                 .setRequired(true)
                 .addChoices(
                     { name: '🏆 High Score', value: 'highscore' }
-                    // FUTURE PROOFING: You can easily add more choices here later!
+                    // Additional reset targets can be added here.
                     // { name: '📊 All User Stats', value: 'stats' },
                     // { name: '🔄 Current Count', value: 'count' }
                 )
@@ -32,7 +32,7 @@ module.exports = {
             return interaction.reply({ content: '❌ Could not read the database.', ephemeral: true });
         }
 
-        // Check if the server actually has data
+        // Verify if the counting game is initialized for the guild.
         if (!database[guildId]) {
             return interaction.reply({ 
                 content: '❌ This server has not set up the counting game yet. Run `/setup` first.', 
@@ -40,8 +40,7 @@ module.exports = {
             });
         }
 
-        // --- FUTURE-PROOF RESET LOGIC ---
-        // A switch statement lets us easily add new targets later!
+        // Process reset based on target selection.
         switch (target) {
             case 'highscore':
                 database[guildId].highScore = 0;
@@ -53,7 +52,7 @@ module.exports = {
                 });
                 break;
                 
-            // case example for future targets:
+            // Example configuration for future targets:
             // case 'stats':
             //     database[guildId].users = {};
             //     fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));

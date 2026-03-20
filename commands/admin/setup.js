@@ -22,7 +22,7 @@ module.exports = {
                     { name: 'Advanced (Math equations allowed)', value: 'advanced' }
                 )
         )
-        // THE NEW OPTION FOR TWICE IN A ROW
+        // Option for handling consecutive counts.
         .addStringOption(option =>
             option.setName('twice_in_a_row')
                 .setDescription('What happens if a user counts twice in a row?')
@@ -37,7 +37,7 @@ module.exports = {
     async execute(interaction) {
         const targetChannel = interaction.options.getChannel('channel');
         const selectedMode = interaction.options.getString('mode');
-        const twiceBehavior = interaction.options.getString('twice_in_a_row'); // Get the new option
+        const twiceBehavior = interaction.options.getString('twice_in_a_row'); // Retrieve consecutive behavior setting.
         const guildId = interaction.guild.id;
 
         const dataPath = path.join(__dirname, '..', '..', 'data.json');
@@ -50,11 +50,11 @@ module.exports = {
             console.error("Error reading data.json:", error);
         }
 
-        // Check if the server already has a high score saved
+        // Retrieve existing high score if available.
         const existingData = database[guildId] || {};
         const savedHighScore = existingData.highScore || 0;
 
-        // Save the new twiceBehavior setting to the database
+        // Initialize and persist new game state for the guild.
         database[guildId] = {
             channelId: targetChannel.id,
             mode: selectedMode,
@@ -68,7 +68,7 @@ module.exports = {
 
         const displayMode = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
         
-        // Format the behavior text for a nice reply message
+        // Format the response message.
         let behaviorText = '';
         if (twiceBehavior === 'reset') behaviorText = 'Reset the count';
         if (twiceBehavior === 'warn') behaviorText = 'Warn user (No reset)';

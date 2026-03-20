@@ -4,42 +4,42 @@ const { Client, Collection, GatewayIntentBits, Events } = require('discord.js');
 const { evaluate } = require('mathjs'); // The safe math library!
 require('dotenv').config();
 
-// 1. ADD NEW INTENTS HERE SO THE BOT CAN READ MESSAGES
-const client = new Client({ 
-    intents:[
+// Define required Gateway intents for the bot.
+const client = new Client({
+    intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent // Required to read what users type!
-    ] 
+        GatewayIntentBits.MessageContent // Enables reading of message content.
+    ]
 });
 
 client.commands = new Collection();
 
-// --- DYNAMIC COMMAND LOADER ---
+// Load command files dynamically.
 const foldersPath = path.join(__dirname, 'commands');
 const commandFolders = fs.readdirSync(foldersPath);
 
 for (const folder of commandFolders) {
     const commandsPath = path.join(foldersPath, folder);
     const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
-    
+
     for (const file of commandFiles) {
         const filePath = path.join(commandsPath, file);
         const command = require(filePath);
         if ('data' in command && 'execute' in command) {
             client.commands.set(command.data.name, command);
         } else {
-            console.log(`[WARNING] The command at ${filePath} is missing "data" or "execute".`);
+            console.error(`[ERROR] Command at ${filePath} is missing "data" or "execute" property.`);
         }
     }
 }
 
-// --- WHEN BOT IS READY ---
+// Handle client ready event.
 client.once(Events.ClientReady, readyClient => {
     console.log(`✅ Ready! Logged in as ${readyClient.user.tag}`);
 });
 
-// --- SLASH COMMAND EXECUTOR ---
+// Handle incoming slash command interactions.
 client.on(Events.InteractionCreate, async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -58,7 +58,7 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-// --- COUNTING GAME LISTENER ---
+// Process incoming messages for the counting game.
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
 
@@ -67,7 +67,7 @@ client.on(Events.MessageCreate, async message => {
     try {
         database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
     } catch (error) {
-        return; 
+        return;
     }
 
     const guildData = database[message.guild.id];
@@ -93,76 +93,79 @@ client.on(Events.MessageCreate, async message => {
         }
     }
 
-// --- UPDATED RUIN COUNT LOGIC (WITH VIBES & EMOJIS) ---
+    // Helper function to handle incorrect counts and reset the game state.
     const ruinCount = async (reason) => {
         const achievedNumber = guildData.currentNumber - 1;
+        // Retrieve the previous high score to verify if a new record was set.
+        const previousRecord = guildData.lastHighScore !== undefined ? guildData.lastHighScore : (guildData.highScore || 0);
         const currentRecord = guildData.highScore || 0;
-        
+
         let recordText = `🏆 The server **HIGHSCORE** is \`${currentRecord}\`.`;
-        
-        // Did they set a new record before ruining it?
-        if (achievedNumber > currentRecord && achievedNumber > 0) {
+
+        // Evaluate if the current session establishes a new historical best.
+        if (achievedNumber > previousRecord && achievedNumber > 0) {
             recordText = `🎉 Wait... they actually set a **NEW SERVER HIGHSCORE** of \`${achievedNumber}\`! 🏆`;
-            guildData.highScore = achievedNumber; // Save the new record
         }
 
         await message.react('❌');
-        
-        // Format the message with emojis and actually MENTION the user!
+
+        // Format the ruin notification message.
         let ruinMessage = `🚨 ${reason}\n\n💀 ${message.author} ruined the count`;
         if (achievedNumber > 0) ruinMessage += ` at \`${achievedNumber}\`!`;
         else ruinMessage += `!`;
-        
+
         ruinMessage += `\n${recordText}\n🔄 The count has been reset to \`1\`. Start again!`;
 
         await message.reply(ruinMessage);
-        
-        // Reset the count but KEEP the high score
+
+        // Reset the game state while preserving the high score.
         guildData.currentNumber = 1;
         guildData.lastUserId = null;
+        // Persist the current high score as the baseline for the next session.
+        guildData.lastHighScore = guildData.highScore;
         fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
     };
 
-    // 1. Valid input?
+    // Validate the user input based on the game mode.
     if (!isValidInput) {
         return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}!`);
     }
 
-    // 2. Twice in a row logic
+    // Handle consecutive counts by the same user.
     if (message.author.id === guildData.lastUserId) {
-        const behavior = guildData.twiceBehavior || 'reset'; 
+        const behavior = guildData.twiceBehavior || 'reset';
 
         if (behavior === 'warn') {
             await message.react('⚠️');
             return message.reply(`You can't count twice in a row, **${message.author.username}**! The next number is still **${guildData.currentNumber}**.`);
         } else if (behavior === 'allow') {
-            // Do nothing, let them continue counting
+            // No action needed; allow consecutive counting.
         } else {
             return ruinCount(`You can't count twice in a row!`);
         }
     }
 
-    // 3. Right number?
+    // Verify if the input matches the expected sequence number.
     if (userNumber !== guildData.currentNumber) {
         return ruinCount(`You typed \`${userNumber}\`, but the next number was \`${guildData.currentNumber}\`!`);
     }
 
-    // 4. Correct!
+    // Process successful count.
     await message.react('✅');
-    
-    // --- MILESTONES (EASY & FUN) ---
+
+    // Process specific milestones.
     if (userNumber === 69) await message.react('🍆');
     if (userNumber === 100) await message.react('💯');
     if (userNumber === 420) await message.react('😎');
     if (userNumber % 1000 === 0) await message.react('🎉'); // Reacts to 1000, 2000, 3000, etc.
 
-    // Update the high score instantly just in case the bot restarts
+    // Update the current high score.
     if (!guildData.highScore) guildData.highScore = 0;
     if (userNumber > guildData.highScore) {
         guildData.highScore = userNumber;
     }
 
-    // Advance the game
+    // Increment the count and persist the updated game state.
     guildData.currentNumber += 1;
     guildData.lastUserId = message.author.id;
     fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));

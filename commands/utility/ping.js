@@ -1,12 +1,12 @@
 const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
-    // 'data' defines the command structure for Discord
+    // Command registration data.
     data: new SlashCommandBuilder()
         .setName('ping')
         .setDescription('Replies with Pong!'),
         
-    // 'execute' runs when the user types the command
+    // Executes the ping command.
     async execute(interaction) {
         await interaction.reply('Pong!');
     },
