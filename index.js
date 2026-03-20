@@ -109,6 +109,12 @@ client.on(Events.MessageCreate, async message => {
 
         await message.react('❌');
 
+        // Track the ruin in user stats.
+        const userId = message.author.id;
+        guildData.users = guildData.users || {};
+        guildData.users[userId] = guildData.users[userId] || { counts: 0, ruins: 0, highest: 0 };
+        guildData.users[userId].ruins += 1;
+
         // Format the ruin notification message.
         let ruinMessage = `🚨 ${reason}\n\n💀 ${message.author} ruined the count`;
         if (achievedNumber > 0) ruinMessage += ` at \`${achievedNumber}\`!`;
@@ -163,6 +169,15 @@ client.on(Events.MessageCreate, async message => {
     if (!guildData.highScore) guildData.highScore = 0;
     if (userNumber > guildData.highScore) {
         guildData.highScore = userNumber;
+    }
+
+    // Track the successful count in user stats.
+    const userId = message.author.id;
+    guildData.users = guildData.users || {};
+    guildData.users[userId] = guildData.users[userId] || { counts: 0, ruins: 0, highest: 0 };
+    guildData.users[userId].counts += 1;
+    if (userNumber > guildData.users[userId].highest) {
+        guildData.users[userId].highest = userNumber;
     }
 
     // Increment the count and persist the updated game state.

@@ -13,15 +13,19 @@ module.exports = {
                 .setDescription('What data do you want to reset?')
                 .setRequired(true)
                 .addChoices(
-                    { name: '🏆 High Score', value: 'highscore' }
-                    // Additional reset targets can be added here.
-                    // { name: '📊 All User Stats', value: 'stats' },
-                    // { name: '🔄 Current Count', value: 'count' }
+                    { name: '🏆 High Score', value: 'highscore' },
+                    { name: '📊 Statistics', value: 'stats' }
                 )
+        )
+        .addUserOption(option => 
+            option.setName('user')
+                .setDescription('Specify a user to reset only their stats (leave blank for everyone)')
+                .setRequired(false)
         ),
         
     async execute(interaction) {
         const target = interaction.options.getString('target');
+        const targetUser = interaction.options.getUser('user');
         const guildId = interaction.guild.id;
         const dataPath = path.join(__dirname, '..', '..', 'data.json');
         
@@ -52,12 +56,30 @@ module.exports = {
                 });
                 break;
                 
-            // Example configuration for future targets:
-            // case 'stats':
-            //     database[guildId].users = {};
-            //     fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
-            //     await interaction.reply({ content: '✅ User stats reset.', ephemeral: true });
-            //     break;
+            case 'stats':
+                if (targetUser) {
+                    if (database[guildId].users && database[guildId].users[targetUser.id]) {
+                        delete database[guildId].users[targetUser.id];
+                        fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+                        await interaction.reply({ 
+                            content: `✅ Statistics for **${targetUser.username}** have been reset.`, 
+                            ephemeral: true 
+                        });
+                    } else {
+                        await interaction.reply({ 
+                            content: `⚠️ **${targetUser.username}** has no stats to reset.`, 
+                            ephemeral: true 
+                        });
+                    }
+                } else {
+                    database[guildId].users = {};
+                    fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+                    await interaction.reply({ 
+                        content: '✅ **All User Statistics** have been reset for the server.', 
+                        ephemeral: true 
+                    });
+                }
+                break;
             
             default:
                 await interaction.reply({ 
