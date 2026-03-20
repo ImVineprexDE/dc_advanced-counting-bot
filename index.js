@@ -110,10 +110,10 @@ client.on(Events.MessageCreate, async message => {
         
         // Format the message with emojis and actually MENTION the user!
         let ruinMessage = `🚨 ${reason}\n\n💀 ${message.author} ruined the count`;
-        if (achievedNumber > 0) ruinMessage += ` at **${achievedNumber}**!`;
+        if (achievedNumber > 0) ruinMessage += ` at \`${achievedNumber}\`!`;
         else ruinMessage += `!`;
         
-        ruinMessage += `\n${recordText}\n🔄 The count has been reset to **1**. Start again!`;
+        ruinMessage += `\n${recordText}\n🔄 The count has been reset to \`1\`. Start again!`;
 
         await message.reply(ruinMessage);
         
@@ -144,7 +144,7 @@ client.on(Events.MessageCreate, async message => {
 
     // 3. Right number?
     if (userNumber !== guildData.currentNumber) {
-        return ruinCount(`You typed **${userNumber}**, but the next number was **${guildData.currentNumber}**!`);
+        return ruinCount(`You typed \`${userNumber}\`, but the next number was \`${guildData.currentNumber}\`!`);
     }
 
     // 4. Correct!
