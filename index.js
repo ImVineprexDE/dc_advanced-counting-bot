@@ -134,6 +134,7 @@ client.on(Events.MessageCreate, async message => {
 
     // Validate the user input based on the game mode.
     if (!isValidInput) {
+        if (guildData.allowTalking) return; // Ignore normal text chat
         return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}!`);
     }
 
@@ -162,7 +163,7 @@ client.on(Events.MessageCreate, async message => {
     // Process specific milestones.
     if (userNumber === 7) await message.react('🍀');
     if (userNumber === 13) await message.react('👻');
-    if (userNumber === 21) await message.react('🍷');
+    if (userNumber === 21) await message.react('♠️');
     if (userNumber === 42) await message.react('🌌');
     if (userNumber === 66) await message.react('🛣️');
     if (userNumber === 69) await message.react('🍆');
@@ -181,6 +182,7 @@ client.on(Events.MessageCreate, async message => {
     if (userNumber === 2048) await message.react('🎮');
     if (userNumber === 9000) await message.react('💥');
     if (userNumber === 80085) await message.react('👙');
+    if (userNumber === 127001) await message.react('🏠');
     if (userNumber % 1000 === 0) await message.react('🎉'); // Reacts to 1000, 2000, 3000, etc.
 
     // Update the current high score.
@@ -202,6 +204,76 @@ client.on(Events.MessageCreate, async message => {
     guildData.currentNumber += 1;
     guildData.lastUserId = message.author.id;
     fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
+});
+
+// Anti-Cheat: Catch message edits for counting attempts
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+    if (newMessage.author && newMessage.author.bot) return;
+    
+    const dataPath = path.join(__dirname, 'data.json');
+    let database = {};
+    try {
+        database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    } catch(err) { return; }
+    
+    const guildData = database[newMessage.guildId];
+    if (!guildData || newMessage.channelId !== guildData.channelId) return;
+    
+    if (oldMessage.partial) return; // Can't verify original content
+    
+    const lastValidNumber = guildData.currentNumber - 1;
+    let editedNumber = null;
+    
+    // Check if the original message was the last valid count
+    if (guildData.mode === 'advanced') {
+        try {
+            const val = evaluate(oldMessage.content);
+            if (typeof val === 'number' && !isNaN(val)) editedNumber = val;
+        } catch (e) {}
+    } else {
+        if (/^\d+$/.test(oldMessage.content.trim())) {
+            editedNumber = parseInt(oldMessage.content.trim(), 10);
+        }
+    }
+    
+    // Only scold if they edited the active correct count 
+    if (editedNumber !== lastValidNumber || lastValidNumber === 0) return;
+
+    // If it was the correct count, scold them
+    await newMessage.reply(`⚠️ **${newMessage.author.username}**, you are not allowed to edit your counting numbers!`);
+});
+
+// Anti-Cheat: Catch message deletes for correct counting numbers
+client.on(Events.MessageDelete, async message => {
+    if (message.partial || (message.author && message.author.bot)) return;
+    
+    const dataPath = path.join(__dirname, 'data.json');
+    let database = {};
+    try {
+        database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    } catch(err) { return; }
+    
+    const guildData = database[message.guildId];
+    if (!guildData || message.channelId !== guildData.channelId) return;
+
+    const lastValidNumber = guildData.currentNumber - 1;
+    let deletedNumber = null;
+    
+    if (guildData.mode === 'advanced') {
+        try {
+            const val = evaluate(message.content);
+            if (typeof val === 'number' && !isNaN(val)) deletedNumber = val;
+        } catch (e) {}
+    } else {
+        if (/^\d+$/.test(message.content.trim())) {
+            deletedNumber = parseInt(message.content.trim(), 10);
+        }
+    }
+    
+    if (deletedNumber === lastValidNumber && lastValidNumber > 0) {
+        // They deleted the active number! Repost it!
+        await message.channel.send(`🚨 **${message.author.username}** tried to delete their count! The last number was **${lastValidNumber}**!`);
+    }
 });
 
 client.login(process.env.DISCORD_TOKEN);

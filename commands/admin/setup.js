@@ -32,12 +32,18 @@ module.exports = {
                     { name: '2. Warn the user (No reset)', value: 'warn' },
                     { name: '3. Allow it (Continue counting)', value: 'allow' }
                 )
+        )
+        .addBooleanOption(option =>
+            option.setName('allow_talking')
+                .setDescription('Allow users to talk normally in the channel without ruining counts?')
+                .setRequired(true)
         ),
         
     async execute(interaction) {
         const targetChannel = interaction.options.getChannel('channel');
         const selectedMode = interaction.options.getString('mode');
         const twiceBehavior = interaction.options.getString('twice_in_a_row'); // Retrieve consecutive behavior setting.
+        const allowTalking = interaction.options.getBoolean('allow_talking');
         const guildId = interaction.guild.id;
 
         const dataPath = path.join(__dirname, '..', '..', 'data.json');
@@ -59,6 +65,7 @@ module.exports = {
             channelId: targetChannel.id,
             mode: selectedMode,
             twiceBehavior: twiceBehavior, 
+            allowTalking: allowTalking,
             currentNumber: 1,
             lastUserId: null,
             highScore: savedHighScore
@@ -75,7 +82,7 @@ module.exports = {
         if (twiceBehavior === 'allow') behaviorText = 'Allow multiple counts';
 
         await interaction.reply({ 
-            content: `✅ Setup Complete!\nChannel: ${targetChannel}\nMode: **${displayMode}**\nTwice in a row: **${behaviorText}**\nThe count starts at **1**.`, 
+            content: `✅ Setup Complete!\nChannel: ${targetChannel}\nMode: **${displayMode}**\nTwice in a row: **${behaviorText}**\nAllow Talking: **${allowTalking ? 'Yes' : 'No'}**\nThe count starts at **1**.`, 
             ephemeral: true 
         });
     },
