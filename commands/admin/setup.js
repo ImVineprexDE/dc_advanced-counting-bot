@@ -50,13 +50,18 @@ module.exports = {
             console.error("Error reading data.json:", error);
         }
 
+        // Check if the server already has a high score saved
+        const existingData = database[guildId] || {};
+        const savedHighScore = existingData.highScore || 0;
+
         // Save the new twiceBehavior setting to the database
         database[guildId] = {
             channelId: targetChannel.id,
             mode: selectedMode,
             twiceBehavior: twiceBehavior, 
             currentNumber: 1,
-            lastUserId: null
+            lastUserId: null,
+            highScore: savedHighScore
         };
 
         fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));

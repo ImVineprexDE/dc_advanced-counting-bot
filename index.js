@@ -60,96 +60,111 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // --- COUNTING GAME LISTENER ---
 client.on(Events.MessageCreate, async message => {
-    // Ignore messages from bots (including itself) to prevent infinite loops
     if (message.author.bot) return;
 
-    // Load our saved data
     const dataPath = path.join(__dirname, 'data.json');
     let database = {};
     try {
         database = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
     } catch (error) {
-        return; // If data.json doesn't exist or is broken, do nothing
+        return; 
     }
 
-    // Check if this server has set up the game
     const guildData = database[message.guild.id];
     if (!guildData) return;
-
-    // Check if the message is in the specific counting channel
     if (message.channel.id !== guildData.channelId) return;
 
-    // --- GAME LOGIC STARTS HERE ---
     let userNumber = null;
     let isValidInput = false;
 
-    // Figure out what number the user typed based on the mode
     if (guildData.mode === 'advanced') {
         try {
-            // Safely calculate the math (e.g., "5 + 5" becomes 10)
             userNumber = evaluate(message.content);
-            // Ensure the result is actually a standard number
             if (typeof userNumber === 'number' && !isNaN(userNumber)) {
                 isValidInput = true;
             }
         } catch (error) {
-            // If they type text that isn't math (like "hello"), it throws an error.
             isValidInput = false;
         }
     } else {
-        // Basic Mode: Only accept standard digits (e.g., "5")
         if (/^\d+$/.test(message.content.trim())) {
             userNumber = parseInt(message.content.trim(), 10);
             isValidInput = true;
         }
     }
 
-    // Function to handle ruining the count
+// --- UPDATED RUIN COUNT LOGIC (WITH VIBES & EMOJIS) ---
     const ruinCount = async (reason) => {
-        await message.react('❌');
-        await message.reply(`${reason} **${message.author.username}** ruined the count! It has been reset to **1**.`);
+        const achievedNumber = guildData.currentNumber - 1;
+        const currentRecord = guildData.highScore || 0;
         
-        // Reset the data
+        let recordText = `🏆 The server **HIGHSCORE** is \`${currentRecord}\`.`;
+        
+        // Did they set a new record before ruining it?
+        if (achievedNumber > currentRecord && achievedNumber > 0) {
+            recordText = `🎉 Wait... they actually set a **NEW SERVER HIGHSCORE** of \`${achievedNumber}\`! 🏆`;
+            guildData.highScore = achievedNumber; // Save the new record
+        }
+
+        await message.react('❌');
+        
+        // Format the message with emojis and actually MENTION the user!
+        let ruinMessage = `🚨 ${reason}\n\n💀 ${message.author} ruined the count`;
+        if (achievedNumber > 0) ruinMessage += ` at **${achievedNumber}**!`;
+        else ruinMessage += `!`;
+        
+        ruinMessage += `\n${recordText}\n🔄 The count has been reset to **1**. Start again!`;
+
+        await message.reply(ruinMessage);
+        
+        // Reset the count but KEEP the high score
         guildData.currentNumber = 1;
         guildData.lastUserId = null;
         fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
     };
 
-    // 1. Did they type complete nonsense?
+    // 1. Valid input?
     if (!isValidInput) {
         return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}!`);
     }
 
-    // 2. Did they try to count twice in a row?
+    // 2. Twice in a row logic
     if (message.author.id === guildData.lastUserId) {
-        // We use || 'reset' as a fallback just in case old data doesn't have this setting yet
         const behavior = guildData.twiceBehavior || 'reset'; 
 
         if (behavior === 'warn') {
             await message.react('⚠️');
             return message.reply(`You can't count twice in a row, **${message.author.username}**! The next number is still **${guildData.currentNumber}**.`);
         } else if (behavior === 'allow') {
-            // Do absolutely nothing here! It will skip this block and move 
-            // straight to checking if their math/number is correct.
+            // Do nothing, let them continue counting
         } else {
-            // Default 'reset' behavior
             return ruinCount(`You can't count twice in a row!`);
         }
     }
 
-    // 3. Did they get the number wrong?
+    // 3. Right number?
     if (userNumber !== guildData.currentNumber) {
         return ruinCount(`You typed **${userNumber}**, but the next number was **${guildData.currentNumber}**!`);
     }
 
-    // 4. THEY GOT IT RIGHT!
+    // 4. Correct!
     await message.react('✅');
     
-    // Update the next expected number and remember who counted
+    // --- MILESTONES (EASY & FUN) ---
+    if (userNumber === 69) await message.react('🍆');
+    if (userNumber === 100) await message.react('💯');
+    if (userNumber === 420) await message.react('😎');
+    if (userNumber % 1000 === 0) await message.react('🎉'); // Reacts to 1000, 2000, 3000, etc.
+
+    // Update the high score instantly just in case the bot restarts
+    if (!guildData.highScore) guildData.highScore = 0;
+    if (userNumber > guildData.highScore) {
+        guildData.highScore = userNumber;
+    }
+
+    // Advance the game
     guildData.currentNumber += 1;
     guildData.lastUserId = message.author.id;
-    
-    // Save the progress
     fs.writeFileSync(dataPath, JSON.stringify(database, null, 4));
 });
 
