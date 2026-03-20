@@ -160,9 +160,27 @@ client.on(Events.MessageCreate, async message => {
     await message.react('✅');
 
     // Process specific milestones.
+    if (userNumber === 7) await message.react('🍀');
+    if (userNumber === 13) await message.react('👻');
+    if (userNumber === 21) await message.react('🍷');
+    if (userNumber === 42) await message.react('🌌');
+    if (userNumber === 66) await message.react('🛣️');
     if (userNumber === 69) await message.react('🍆');
+    if (userNumber === 88) await message.react('🏎️');
     if (userNumber === 100) await message.react('💯');
+    if (userNumber === 101) await message.react('🐶');
+    if (userNumber === 111) await message.react('👼');
+    if (userNumber === 247) await message.react('🕒');
+    if (userNumber === 314) await message.react('🥧');
+    if (userNumber === 365) await message.react('📅');
+    if (userNumber === 404) await message.react('🔍');
     if (userNumber === 420) await message.react('😎');
+    if (userNumber === 666) await message.react('😈');
+    if (userNumber === 777) await message.react('🎰');
+    if (userNumber === 1337) await message.react('💻');
+    if (userNumber === 2048) await message.react('🎮');
+    if (userNumber === 9000) await message.react('💥');
+    if (userNumber === 80085) await message.react('👙');
     if (userNumber % 1000 === 0) await message.react('🎉'); // Reacts to 1000, 2000, 3000, etc.
 
     // Update the current high score.

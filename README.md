@@ -15,6 +15,7 @@ A feature-rich, highly customizable Discord bot built with `discord.js` for serv
 - `/setup`: Initialize the text channel, ruleset, and behavior mechanics for the server. (Administrator Only)
 - `/reset`: Manage database resets for specific properties like recovering from a broken high score. (Administrator Only)
 - `/stats`: View your personal or others' accuracy and overall statistics.
+- `/leaderboard`: Display the top 10 most active counters in the server.
 - `/ping`: Standard utility response testing command.
 
 ## 🚀 Installation & Setup
