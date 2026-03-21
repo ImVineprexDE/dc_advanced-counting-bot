@@ -42,13 +42,19 @@ module.exports = {
         let isValidInput = false;
 
         if (guildData.mode === 'advanced') {
-            try {
-                userNumber = evaluate(message.content);
-                if (typeof userNumber === 'number' && !isNaN(userNumber)) {
-                    isValidInput = true;
-                }
-            } catch (error) {
+            const hasLettersOrVariables = /[a-zA-Z=]/.test(message.content);
+            
+            if (hasLettersOrVariables) {
                 isValidInput = false;
+            } else {
+                try {
+                    userNumber = evaluate(message.content);
+                    if (typeof userNumber === 'number' && !isNaN(userNumber)) {
+                        isValidInput = true;
+                    }
+                } catch (error) {
+                    isValidInput = false;
+                }
             }
         } else {
             if (/^\d+$/.test(message.content.trim())) {
@@ -99,7 +105,7 @@ module.exports = {
 
         if (!isValidInput) {
             if (guildData.allow_talking) return; // Ignore normal text chat
-            return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}!`);
+            return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}! (Variables/words are not allowed)`);
         }
 
         if (message.author.id === guildData.last_user_id) {
