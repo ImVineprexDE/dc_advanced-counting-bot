@@ -6,3 +6,4 @@ data.json
 *.old.json
 counting.sqlite
 counting.sqlite-*
+UBUNTU_DEPLOYMENT_GUIDE.md

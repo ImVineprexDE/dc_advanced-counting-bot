@@ -28,6 +28,11 @@ db.exec(`
     );
 `);
 
+// Safely append new feature columns to existing local databases
+try { db.exec('ALTER TABLE guild_data ADD COLUMN extra_lives INTEGER DEFAULT 0'); } catch(e) {}
+try { db.exec('ALTER TABLE guild_data ADD COLUMN extralife_enabled INTEGER DEFAULT 0'); } catch(e) {}
+try { db.exec('ALTER TABLE guild_data ADD COLUMN extralife_interval INTEGER DEFAULT 100'); } catch(e) {}
+
 // --- AUTOMATIC JSON MIGRATION SCRIPT ---
 const oldDataPath = path.join(__dirname, 'data.json');
 if (fs.existsSync(oldDataPath)) {

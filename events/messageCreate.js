@@ -5,6 +5,8 @@ const db = require('../database');
 // Prepared SQL Statements for peak performance in Event Listeners
 const getGuild = db.prepare('SELECT * FROM guild_data WHERE guild_id = ?');
 const updateGuildState = db.prepare('UPDATE guild_data SET current_number = ?, last_user_id = ?, high_score = ?, last_high_score = ? WHERE guild_id = ?');
+const consumeExtraLife = db.prepare('UPDATE guild_data SET extra_lives = extra_lives - 1 WHERE guild_id = ?');
+const grantExtraLife = db.prepare('UPDATE guild_data SET extra_lives = extra_lives + 1 WHERE guild_id = ?');
 
 // Helper to insert or update user stats safely
 const getUserStats = db.prepare('SELECT * FROM user_stats WHERE guild_id = ? AND user_id = ?');
@@ -77,6 +79,19 @@ module.exports = {
 
             ruinMessage += `\n${recordText}\n🔄 The count has been reset to \`1\`. Start again!`;
 
+            // Check for extra lives to save the run!
+            if (guildData.extralife_enabled === 1 && guildData.extra_lives > 0) {
+                consumeExtraLife.run(message.guild.id);
+                const livesLeft = guildData.extra_lives - 1;
+                
+                await message.react('💖');
+                
+                let rescueMessage = `🚨 ${reason}\n\n💀 ${message.author} messed up the count... BUT the server used a **Server Extra Life**! 💖\n*(Lives remaining: ${livesLeft})*`;
+                rescueMessage += `\n\n🛡️ The count remains alive! The next number is still **${guildData.current_number}**. Keep going!`;
+                
+                return message.reply(rescueMessage);
+            }
+
             await message.reply(ruinMessage);
 
             updateGuildState.run(1, null, guildData.high_score, guildData.high_score, message.guild.id);
@@ -142,6 +157,15 @@ module.exports = {
         if (userNumber === 80085) await message.react('👙'); // BOOBS on a calculator
         if (userNumber === 127001) await message.react('🏠'); // Localhost IP (127.0.0.1)
         if (userNumber % 1000 === 0) await message.react('🎉'); // Flat thousands
+
+        // Process Extra Life milestones
+        if (guildData.extralife_enabled === 1 && guildData.extralife_interval) {
+            if (userNumber > 0 && userNumber % guildData.extralife_interval === 0) {
+                grantExtraLife.run(message.guild.id);
+                guildData.extra_lives = (guildData.extra_lives || 0) + 1;
+                await message.channel.send(`🎉 **Milestone Reached!** ${message.author} hit **${userNumber}**, earning the server **+1 Extra Life**! 💖 *(Total Lives: ${guildData.extra_lives})*`);
+            }
+        }
 
         let newHighScore = guildData.high_score || 0;
         if (userNumber > newHighScore) {
