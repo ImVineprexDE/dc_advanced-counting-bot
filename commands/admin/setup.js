@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, EmbedBuilder } = require('discord.js');
 const path = require('node:path');
 const Database = require('better-sqlite3');
 
@@ -72,5 +72,21 @@ module.exports = {
             content: `✅ Setup Complete!\nChannel: ${targetChannel}\nMode: **${displayMode}**\nTwice in a row: **${behaviorText}**\nAllow Talking: **${allowTalking ? 'Yes' : 'No'}**\nThe count starts at **1**.`, 
             ephemeral: true 
         });
+
+        // Send public rules embed to the actual counting channel
+        const rulesEmbed = new EmbedBuilder()
+            .setColor(0x2ecc71)
+            .setTitle('🔢 Counting Game Setup: Rules Activated')
+            .setDescription('The counting game has been initialized or updated! Here are the active rules for this channel:')
+            .addFields(
+                { name: 'Game Mode', value: `**${displayMode}**`, inline: true },
+                { name: 'Twice in a row rule', value: `**${behaviorText}**`, inline: true },
+                { name: 'Chatting Allowed?', value: `**${allowTalking ? 'Yes (ignored if not a number)' : 'No (strictly numbers)'}**`, inline: true },
+                { name: 'Starting Number', value: 'The count is at **1**! Let\'s go!', inline: false }
+            )
+            .setFooter({ text: 'Advanced Counting Bot' })
+            .setTimestamp();
+
+        await targetChannel.send({ embeds: [rulesEmbed] });
     },
 };
