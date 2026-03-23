@@ -6,4 +6,13 @@ data.json
 *.old.json
 counting.sqlite
 counting.sqlite-*
-UBUNTU_DEPLOYMENT_GUIDE.md
+future_features.md
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Jest Tests
+coverage/
+.jest-cache/

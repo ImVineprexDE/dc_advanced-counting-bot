@@ -1,5 +1,5 @@
 const { Events } = require('discord.js');
-const { evaluate } = require('mathjs');
+const { validateCountInput } = require('../utils/validation');
 const db = require('../database');
 
 // Prepared SQL Statements for peak performance in Event Listeners
@@ -38,30 +38,9 @@ module.exports = {
         if (!guildData) return;
         if (message.channel.id !== guildData.channel_id) return;
 
-        let userNumber = null;
-        let isValidInput = false;
-
-        if (guildData.mode === 'advanced') {
-            const hasLettersOrVariables = /[a-zA-Z=]/.test(message.content);
-            
-            if (hasLettersOrVariables) {
-                isValidInput = false;
-            } else {
-                try {
-                    userNumber = evaluate(message.content);
-                    if (typeof userNumber === 'number' && !isNaN(userNumber)) {
-                        isValidInput = true;
-                    }
-                } catch (error) {
-                    isValidInput = false;
-                }
-            }
-        } else {
-            if (/^\d+$/.test(message.content.trim())) {
-                userNumber = parseInt(message.content.trim(), 10);
-                isValidInput = true;
-            }
-        }
+        const validationResult = validateCountInput(message.content, guildData.mode);
+        const isValidInput = validationResult.isValid;
+        const userNumber = validationResult.userNumber;
 
         // Helper function to handle incorrect counts and reset the game state.
         const ruinCount = async (reason) => {
@@ -105,7 +84,10 @@ module.exports = {
 
         if (!isValidInput) {
             if (guildData.allow_talking) return; // Ignore normal text chat
-            return ruinCount(`That's not a valid ${guildData.mode === 'advanced' ? 'math equation' : 'number'}! (Variables/words are not allowed)`);
+            let expected = 'number';
+            if (guildData.mode === 'advanced') expected = 'math equation or number';
+            else if (guildData.mode === 'math_only') expected = 'strict math equation (must contain operators)';
+            return ruinCount(`That's not a valid ${expected}!`);
         }
 
         if (message.author.id === guildData.last_user_id) {

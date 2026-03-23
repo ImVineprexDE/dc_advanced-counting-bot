@@ -6,7 +6,7 @@ module.exports = {
     data: new SlashCommandBuilder()
         .setName('leaderboard')
         .setDescription('View the top 10 counters in the server.'),
-        
+
     // Executes the leaderboard command.
     async execute(interaction) {
         const guildId = interaction.guild.id;
@@ -14,7 +14,7 @@ module.exports = {
         const generateBoard = (type) => {
             let orderBy = 'counts DESC, highest DESC';
             let condition = 'counts > 0 OR ruins > 0'; // ensure at least some stats
-            
+
             if (type === 'highest') {
                 orderBy = 'highest DESC, counts DESC';
                 condition = 'highest > 0';
@@ -42,13 +42,13 @@ module.exports = {
             let boardText = '';
             users.forEach((u, index) => {
                 const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
-                
+
                 if (type === 'highest') {
-                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Score: **${u.highest}** (Total: \`${u.total}\`)\n`;
+                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Score: **${u.highest}** 🏆\n`;
                 } else if (type === 'ruins') {
-                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Ruins: **${u.ruins}** 💀 (Total: \`${u.total}\`)\n`;
+                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Ruins: **${u.ruins}** 💀\n`;
                 } else {
-                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Total: **${u.total}** (Best: \`${u.highest}\`)\n`;
+                    boardText += `${medal} **#${index + 1}** <@${u.user_id}> — Total: **${u.total}** 🔢\n`;
                 }
             });
 
@@ -61,7 +61,7 @@ module.exports = {
                 'highest': '🏆 Top 10: Highest Scores',
                 'ruins': '💀 Top 10: Most Ruins'
             };
-            
+
             const colorMap = {
                 'total': 0x00FF00,
                 'highest': 0xFFD700,
@@ -98,16 +98,16 @@ module.exports = {
         const components = createButtons(currentType);
 
         // Send public message but fetch reply so we can attach a collector
-        const reply = await interaction.reply({ 
-            embeds: [embed], 
+        const reply = await interaction.reply({
+            embeds: [embed],
             components: [components],
-            fetchReply: true 
+            fetchReply: true
         });
 
         // 60-second collector for interactions
-        const collector = reply.createMessageComponentCollector({ 
-            componentType: ComponentType.Button, 
-            time: 60000 
+        const collector = reply.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 60000
         });
 
         collector.on('collect', async i => {
@@ -130,8 +130,8 @@ module.exports = {
             // Disable buttons after 1 minute so they no longer respond
             const disabledButtons = createButtons(currentType).components.map(b => ButtonBuilder.from(b).setDisabled(true));
             const disabledRow = new ActionRowBuilder().addComponents(disabledButtons);
-            
-            interaction.editReply({ components: [disabledRow] }).catch(() => {});
+
+            interaction.editReply({ components: [disabledRow] }).catch(() => { });
         });
     },
 };

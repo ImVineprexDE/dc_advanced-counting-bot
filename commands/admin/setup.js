@@ -19,7 +19,8 @@ module.exports = {
                 .setRequired(true)
                 .addChoices(
                     { name: 'Basic (Numbers only)', value: 'basic' },
-                    { name: 'Advanced (Math equations allowed)', value: 'advanced' }
+                    { name: 'Advanced (Math equations allowed)', value: 'advanced' },
+                    { name: 'Strict Math (Equations REQUIRED)', value: 'math_only' }
                 )
         )
         // Option for handling consecutive counts.
@@ -59,7 +60,7 @@ module.exports = {
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(guildId, targetChannel.id, selectedMode, twiceBehavior, allowTalking ? 1 : 0, 1, null, savedHighScore, savedHighScore);
 
-        const displayMode = selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
+        const displayMode = selectedMode === 'math_only' ? 'Strict Math' : selectedMode.charAt(0).toUpperCase() + selectedMode.slice(1);
         
         // Format the response message.
         let behaviorText = '';
